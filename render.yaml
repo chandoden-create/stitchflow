@@ -18,15 +18,9 @@ services:
           name: stitchflow-db
           property: connectionString
       - key: REDIS_HOST
-        fromService:
-          type: redis
-          name: stitchflow-redis
-          property: host
+        value: ""
       - key: REDIS_PORT
-        fromService:
-          type: redis
-          name: stitchflow-redis
-          property: port
+        value: "6379"
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
@@ -54,19 +48,11 @@ services:
       - key: EXPO_PUBLIC_CURRENCY_SYMBOL
         value: "₹"
       - key: EXPO_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: stitchflow-backend
-          property: url
+        value: https://stitchflow-backend.onrender.com
 
 databases:
-  # Managed PostgreSQL Database
+  # Managed PostgreSQL Database (Free)
   - name: stitchflow-db
     plan: free
     databaseName: stitchflow
     user: stitchflow
-
-  # Managed Redis Cache
-  - name: stitchflow-redis
-    plan: free
-    ipAllowList: []
