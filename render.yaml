@@ -10,7 +10,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: 18.20.0
+        value: 20.14.0
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -37,7 +37,7 @@ services:
     name: stitchflow-mobile
     env: static
     rootDir: mobile
-    buildCommand: npm install --include=dev --legacy-peer-deps --ignore-scripts && npx expo export -p web
+    buildCommand: npx expo export -p web
     staticPublishPath: dist
     routes:
       - type: rewrite
@@ -47,7 +47,9 @@ services:
       - key: CI
         value: "1"
       - key: NODE_VERSION
-        value: 18.20.0
+        value: 20.14.0
+      - key: NPM_FLAGS
+        value: "--ignore-scripts --legacy-peer-deps"
       - key: EXPO_PUBLIC_APP_NAME
         value: StitchFlow
       - key: EXPO_PUBLIC_CURRENCY_SYMBOL
