@@ -19,22 +19,30 @@ export const StatCard: React.FC<StatCardProps> = ({
   accentColor = '#6B2D3E',
   onPress,
 }) => {
-  const Container = onPress ? TouchableOpacity : View;
-
-  return (
-    <Container
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.82 : 1}
-    >
+  const content = (
+    <>
       <View style={[styles.accentLine, { backgroundColor: accentColor }]} />
       <View style={styles.content}>
         <Text style={styles.label}>{label}</Text>
         <Text style={[styles.value, { color: accentColor }]}>{value}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
-    </Container>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={onPress}
+        activeOpacity={0.82}
+      >
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={styles.card}>{content}</View>;
 };
 
 const styles = StyleSheet.create({

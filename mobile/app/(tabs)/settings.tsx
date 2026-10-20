@@ -72,7 +72,18 @@ export default function SettingsScreen() {
       setWhatsappAccessToken(designer.whatsappAccessToken || '');
       setWhatsappSandboxMode(designer.whatsappSandboxMode ?? true);
     }
-  }, [designer?.id]);
+  }, [
+    designer?.name,
+    designer?.designerName,
+    designer?.businessName,
+    designer?.email,
+    designer?.phone,
+    designer?.address,
+    designer?.messageSignature,
+    designer?.whatsappPhoneNumberId,
+    designer?.whatsappAccessToken,
+    designer?.whatsappSandboxMode,
+  ]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (payload: any) => authApi.updateProfile(payload),
@@ -354,7 +365,7 @@ export default function SettingsScreen() {
         message="Are you sure you want to log out of your StitchFlow account on this device?"
         confirmLabel="Log Out"
         cancelLabel="Stay Logged In"
-        destructive
+        confirmVariant="danger"
         onConfirm={handleLogout}
         onCancel={() => setShowLogoutConfirm(false)}
       />

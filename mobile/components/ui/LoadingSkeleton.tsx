@@ -57,7 +57,10 @@ export function CardSkeleton({ style }: CardSkeletonProps) {
   );
 }
 
-export function LoadingSkeleton() {
+export function LoadingSkeleton({ width, height, borderRadius, style }: SkeletonProps = {}) {
+  if (width !== undefined || height !== undefined) {
+    return <Skeleton width={width} height={height} borderRadius={borderRadius} style={style} />;
+  }
   return (
     <View style={styles.container}>
       {[0, 1, 2, 3].map((i) => (

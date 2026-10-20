@@ -41,26 +41,26 @@ export const OrderItemForm: React.FC<OrderItemFormProps> = ({ onSave, onCancel }
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const priceNum = parseFloat(unitPrice) || 0;
+  const priceNum = parseFloat(String(unitPrice).replace(/[^0-9.]/g, '')) || 0;
   const lineTotal = quantity * priceNum;
 
   const handleIncrement = () => setQuantity((q) => q + 1);
   const handleDecrement = () => setQuantity((q) => (q > 1 ? q - 1 : 1));
 
   const handleSave = () => {
-    if (!description.trim()) {
-      setError('Please enter item description (e.g. Silk blouse with back neck design)');
-      return;
-    }
-    if (priceNum <= 0) {
-      setError('Please enter a valid price per unit');
+    const garmentLabel =
+      GARMENT_TYPES.find((t) => t.value === garmentType)?.label || 'Garment Stitching';
+    const finalDescription = description.trim() || garmentLabel;
+
+    if (!(priceNum > 0)) {
+      setError('Please enter a valid stitching price per unit (e.g. 800)');
       return;
     }
 
     setError(null);
     onSave({
       garmentType,
-      description: description.trim(),
+      description: finalDescription,
       quantity,
       unitPrice: priceNum.toFixed(2),
       notes: notes.trim() || undefined,
@@ -76,13 +76,6 @@ export const OrderItemForm: React.FC<OrderItemFormProps> = ({ onSave, onCancel }
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
-
-      {error ? (
-        <View style={styles.errorBox}>
-          <Ionicons name="alert-circle" size={16} color={Colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
 
       {/* Garment Type Picker */}
       <Text style={styles.sectionLabel}>Garment Type</Text>
@@ -119,7 +112,7 @@ export const OrderItemForm: React.FC<OrderItemFormProps> = ({ onSave, onCancel }
 
       {/* Item Description */}
       <Input
-        label="Description / Design Details *"
+        label="Description / Design Details"
         placeholder="e.g. Designer blouse with lace & latkan"
         value={description}
         onChangeText={setDescription}
@@ -213,6 +206,13 @@ export const OrderItemForm: React.FC<OrderItemFormProps> = ({ onSave, onCancel }
         value={notes}
         onChangeText={setNotes}
       />
+
+      {error ? (
+        <View style={styles.errorBox} testID="item-form-error">
+          <Ionicons name="alert-circle" size={16} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
       {/* Action Buttons */}
       <View style={styles.buttonRow}>

@@ -20,3 +20,10 @@ export function getGarmentLabel(value: string): string {
 export function getGarmentIcon(value: string): string {
   return GARMENT_TYPES.find((g) => g.value === value)?.icon ?? 'shirt-outline';
 }
+
+export function getGarmentTypeConfig(value: string): { value: string; label: string; icon: string } {
+  const found = GARMENT_TYPES.find((g) => g.value === value);
+  return found
+    ? { value: found.value, label: found.label, icon: found.icon }
+    : { value, label: value || 'Garment', icon: 'shirt-outline' };
+}

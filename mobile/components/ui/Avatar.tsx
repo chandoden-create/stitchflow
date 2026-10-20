@@ -38,7 +38,7 @@ export function Avatar({ name, size = 40, imageUrl, style }: AvatarProps) {
     return (
       <Image
         source={{ uri: imageUrl }}
-        style={[{ width: size, height: size, borderRadius: size / 2 }, style]}
+        style={[{ width: size, height: size, borderRadius: size / 2 }, style as any]}
       />
     );
   }

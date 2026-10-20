@@ -10,19 +10,29 @@ interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
+  description?: string;
   actionLabel?: string;
   onAction?: () => void;
   style?: ViewStyle;
 }
 
-export function EmptyState({ icon = 'folder-open-outline', title, subtitle, actionLabel, onAction, style }: EmptyStateProps) {
+export function EmptyState({
+  icon = 'folder-open-outline',
+  title,
+  subtitle,
+  description,
+  actionLabel,
+  onAction,
+  style,
+}: EmptyStateProps) {
+  const descText = description || subtitle;
   return (
     <View style={[styles.container, style]}>
       <View style={styles.iconContainer}>
         <Ionicons name={icon} size={48} color={Colors.primary} style={{ opacity: 0.4 }} />
       </View>
       <Text style={styles.title}>{title}</Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {descText && <Text style={styles.subtitle}>{descText}</Text>}
       {actionLabel && onAction && (
         <Button
           title={actionLabel}

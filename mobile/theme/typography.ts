@@ -47,6 +47,7 @@ export const Typography = {
   title3: { fontSize: 20, fontWeight: '600' as const, lineHeight: 25 },
   headline: { fontSize: 17, fontWeight: '600' as const, lineHeight: 22 },
   subhead: { fontSize: 15, fontWeight: '400' as const, lineHeight: 20 },
+  callout: { fontSize: 16, fontWeight: '500' as const, lineHeight: 21 },
   caption1: { fontSize: 12, fontWeight: '400' as const, lineHeight: 16 },
   caption2: { fontSize: 11, fontWeight: '400' as const, lineHeight: 14 },
 } as const;
