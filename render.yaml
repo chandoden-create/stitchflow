@@ -37,13 +37,15 @@ services:
     name: stitchflow-mobile
     env: static
     rootDir: mobile
-    buildCommand: npm install --include=dev --legacy-peer-deps --ignore-scripts && npx expo export --platform web
+    buildCommand: npm install --include=dev --legacy-peer-deps --ignore-scripts && npx expo export -p web
     staticPublishPath: dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
+      - key: CI
+        value: "1"
       - key: NODE_VERSION
         value: 18.20.0
       - key: EXPO_PUBLIC_APP_NAME
