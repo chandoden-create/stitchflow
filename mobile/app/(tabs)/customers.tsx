@@ -54,26 +54,14 @@ export default function CustomersScreen() {
 
         {/* Search Bar */}
         <View style={styles.searchWrapper}>
-          <Ionicons
-            name="search-outline"
-            size={20}
-            color={Colors.placeholder}
-            style={styles.searchIcon}
-          />
           <Input
             placeholder="Search by customer name or WhatsApp number..."
             value={searchTerm}
             onChangeText={setSearchTerm}
-            style={styles.searchInput}
+            leftIcon="search-outline"
+            rightIcon={searchTerm ? 'close-circle' : undefined}
+            onRightIconPress={searchTerm ? () => setSearchTerm('') : undefined}
           />
-          {searchTerm ? (
-            <TouchableOpacity
-              onPress={() => setSearchTerm('')}
-              style={styles.clearSearchBtn}
-            >
-              <Ionicons name="close-circle" size={18} color={Colors.placeholder} />
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         {/* List of Customers */}

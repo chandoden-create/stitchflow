@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,25 +15,33 @@ import { Typography } from '../../theme/typography';
 import { Spacing } from '../../theme/spacing';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { normalizeIndianPhone } from '../../lib/store/local-db';
 
 const customerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  name: z.string().trim().min(2, 'Customer name must be at least 2 characters'),
   whatsappNumber: z
     .string()
-    .min(10, 'Enter a valid 10-digit mobile number')
-    .regex(/^(\+91|91)?[6-9]\d{9}$/, 'Please enter a valid Indian mobile number'),
+    .trim()
+    .refine(
+      (val) => {
+        const digits = val.replace(/[^0-9]/g, '');
+        return digits.length >= 10 && digits.length <= 15;
+      },
+      { message: 'Enter a valid 10-digit WhatsApp mobile number' }
+    ),
   altPhone: z.string().optional(),
-  notes: z.string().max(500).optional(),
-  consentGiven: z.boolean(),
+  notes: z.string().optional(),
+  consentGiven: z.boolean().default(true),
 });
 
-export type CustomerFormData = z.infer<typeof customerSchema>;
+export type CustomerFormValues = z.infer<typeof customerSchema>;
 
 interface CustomerFormProps {
-  initialValues?: Partial<CustomerFormData>;
-  onSubmit: (data: CustomerFormData) => void;
+  initialValues?: Partial<CustomerFormValues>;
+  onSubmit: (values: CustomerFormValues) => void;
   isLoading?: boolean;
   submitLabel?: string;
+  duplicateError?: string | null;
 }
 
 export const CustomerForm: React.FC<CustomerFormProps> = ({
@@ -35,24 +49,51 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
   onSubmit,
   isLoading = false,
   submitLabel = 'Save Customer',
+  duplicateError,
 }) => {
   const {
     control,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
-  } = useForm<CustomerFormData>({
+  } = useForm<CustomerFormValues>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
       name: initialValues?.name || '',
-      whatsappNumber: initialValues?.whatsappNumber || '',
+      whatsappNumber: initialValues?.whatsappNumber || '+91',
       altPhone: initialValues?.altPhone || '',
       notes: initialValues?.notes || '',
       consentGiven: initialValues?.consentGiven ?? true,
     },
   });
 
+  const consentGiven = watch('consentGiven');
+
+  const handleFormSubmit = (values: CustomerFormValues) => {
+    const formattedPhone = normalizeIndianPhone(values.whatsappNumber);
+    onSubmit({
+      ...values,
+      name: values.name.trim(),
+      whatsappNumber: formattedPhone,
+      altPhone: values.altPhone?.trim() || undefined,
+      notes: values.notes?.trim() || undefined,
+    });
+  };
+
   return (
-    <View style={styles.form}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
+      {duplicateError ? (
+        <View style={styles.duplicateBanner}>
+          <Ionicons name="warning" size={20} color={Colors.warning} />
+          <Text style={styles.duplicateText}>{duplicateError}</Text>
+        </View>
+      ) : null}
+
       <Controller
         control={control}
         name="name"
@@ -60,10 +101,11 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
           <Input
             label="Customer Full Name *"
             placeholder="e.g. Priya Sharma"
-            onBlur={onBlur}
-            onChangeText={onChange}
             value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
             error={errors.name?.message}
+            leftIcon="person-outline"
           />
         )}
       />
@@ -73,14 +115,15 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
         name="whatsappNumber"
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
-            label="WhatsApp Mobile Number *"
-            placeholder="e.g. 9876543210"
+            label="WhatsApp Number *"
+            placeholder="+91 98765 43210"
             keyboardType="phone-pad"
-            onBlur={onBlur}
-            onChangeText={onChange}
             value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
             error={errors.whatsappNumber?.message}
-            hint="Used to identify returning customers & send order updates"
+            hint="Used for automated order status & pickup notifications"
+            leftIcon="logo-whatsapp"
           />
         )}
       />
@@ -91,12 +134,13 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
             label="Alternate Phone Number (Optional)"
-            placeholder="e.g. 9123456780"
+            placeholder="Secondary contact number"
             keyboardType="phone-pad"
-            onBlur={onBlur}
-            onChangeText={onChange}
             value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
             error={errors.altPhone?.message}
+            leftIcon="call-outline"
           />
         )}
       />
@@ -106,89 +150,112 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
         name="notes"
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
-            label="Customer Notes & Preferences"
-            placeholder="e.g. Prefers boat-neck blouses, deep back cut"
+            label="Measurements & Styling Notes (Optional)"
+            placeholder="e.g. Chest: 36, Waist: 30, Blouse Length: 14.5, Prefers deep neck with piping..."
             multiline
-            numberOfLines={3}
-            onBlur={onBlur}
-            onChangeText={onChange}
+            numberOfLines={4}
             value={value}
-            error={errors.notes?.message}
+            onChangeText={onChange}
+            onBlur={onBlur}
           />
         )}
       />
 
-      {/* WhatsApp Consent Row */}
-      <Controller
-        control={control}
-        name="consentGiven"
-        render={({ field: { onChange, value } }) => (
-          <View style={styles.consentCard}>
-            <View style={styles.consentInfo}>
-              <View style={styles.consentTitleRow}>
-                <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
-                <Text style={styles.consentTitle}>WhatsApp Notification Consent</Text>
-              </View>
-              <Text style={styles.consentDesc}>
-                Customer agreed to receive order receipts, completion notices, and delivery updates via WhatsApp.
-              </Text>
-            </View>
-            <Switch
-              value={value}
-              onValueChange={onChange}
-              trackColor={{ false: Colors.border, true: '#25D366' }}
-              thumbColor={Colors.white}
-            />
-          </View>
-        )}
-      />
+      {/* WhatsApp Consent Toggle */}
+      <TouchableOpacity
+        style={styles.consentRow}
+        onPress={() => setValue('consentGiven', !consentGiven)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.checkbox, consentGiven && styles.checkboxChecked]}>
+          {consentGiven ? (
+            <Ionicons name="checkmark" size={16} color={Colors.white} />
+          ) : null}
+        </View>
+        <View style={styles.consentTextContainer}>
+          <Text style={styles.consentTitle}>
+            Customer has given consent to receive WhatsApp notifications
+          </Text>
+          <Text style={styles.consentSubtitle}>
+            Sends automatic receipts when order is registered, completed, and delivered.
+          </Text>
+        </View>
+      </TouchableOpacity>
 
       <Button
         label={submitLabel}
-        onPress={handleSubmit(onSubmit)}
+        variant="primary"
+        size="lg"
+        onPress={handleSubmit(handleFormSubmit)}
         loading={isLoading}
-        style={styles.submitBtn}
+        style={styles.submitButton}
       />
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  form: {
-    gap: Spacing.sm,
-  },
-  consentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAF8',
-    borderRadius: 14,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#E2F0E5',
-    marginVertical: Spacing.sm,
-  },
-  consentInfo: {
+  container: {
     flex: 1,
-    marginRight: Spacing.md,
   },
-  consentTitleRow: {
+  content: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+  },
+  duplicateBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: Spacing.sm,
+    backgroundColor: '#FFF8E6',
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    borderRadius: 12,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  duplicateText: {
+    ...Typography.subhead,
+    color: '#995C00',
+    flex: 1,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FAF7F2',
+    padding: Spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.xl,
+    gap: Spacing.md,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.primary,
+  },
+  consentTextContainer: {
+    flex: 1,
   },
   consentTitle: {
     ...Typography.subhead,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.text,
   },
-  consentDesc: {
-    ...Typography.caption2,
+  consentSubtitle: {
+    ...Typography.caption1,
     color: Colors.textSecondary,
-    lineHeight: 16,
+    marginTop: 2,
   },
-  submitBtn: {
-    marginTop: Spacing.md,
+  submitButton: {
+    marginTop: Spacing.sm,
   },
 });

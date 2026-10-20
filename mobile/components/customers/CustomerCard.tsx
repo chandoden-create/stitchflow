@@ -36,16 +36,8 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
 
   const handleWhatsAppPress = async () => {
     const cleanPhone = whatsappNumber.replace(/[^0-9]/g, '');
-    const url = `whatsapp://send?phone=${cleanPhone}`;
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert(
-        'WhatsApp Not Found',
-        'WhatsApp does not appear to be installed on this device.',
-      );
-    }
+    const url = `https://wa.me/${cleanPhone}`;
+    await Linking.openURL(url);
   };
 
   const handleCallPress = async () => {

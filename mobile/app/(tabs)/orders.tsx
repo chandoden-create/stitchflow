@@ -68,26 +68,14 @@ export default function OrdersScreen() {
 
         {/* Search Input */}
         <View style={styles.searchWrapper}>
-          <Ionicons
-            name="search-outline"
-            size={18}
-            color={Colors.placeholder}
-            style={styles.searchIcon}
-          />
           <Input
             placeholder="Search by order # (e.g. SF-1001) or customer..."
             value={searchTerm}
             onChangeText={setSearchTerm}
-            style={styles.searchInput}
+            leftIcon="search-outline"
+            rightIcon={searchTerm ? 'close-circle' : undefined}
+            onRightIconPress={searchTerm ? () => setSearchTerm('') : undefined}
           />
-          {searchTerm ? (
-            <TouchableOpacity
-              onPress={() => setSearchTerm('')}
-              style={styles.clearSearchBtn}
-            >
-              <Ionicons name="close-circle" size={18} color={Colors.placeholder} />
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         {/* Status Filter Horizontal Pills */}

@@ -3,111 +3,133 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { Typography } from '../../../theme/typography';
 import { Spacing } from '../../../theme/spacing';
-import { CustomerForm, CustomerFormData } from '../../../components/forms/CustomerForm';
-import { customersApi } from '../../../lib/api/customers.api';
+import { customersApi, type Customer } from '../../../lib/api/customers.api';
+import {
+  CustomerForm,
+  CustomerFormValues,
+} from '../../../components/forms/CustomerForm';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
 
 export default function NewCustomerScreen() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [savedCustomer, setSavedCustomer] = useState<Customer | null>(null);
 
-  const handleSubmit = async (data: CustomerFormData) => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const customer = await customersApi.create({
-        name: data.name,
-        whatsappNumber: data.whatsappNumber,
-        altPhone: data.altPhone || undefined,
-        notes: data.notes || undefined,
-        consentGiven: data.consentGiven,
-      });
+  const createMutation = useMutation({
+    mutationFn: (values: CustomerFormValues) =>
+      customersApi.create({
+        name: values.name,
+        whatsappNumber: values.whatsappNumber,
+        altPhone: values.altPhone || undefined,
+        notes: values.notes || undefined,
+        consentGiven: values.consentGiven,
+      }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-selector'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setSavedCustomer(created);
+    },
+    onError: (err: any) => {
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Could not create customer';
+      setDuplicateError(msg);
+    },
+  });
 
-      Alert.alert(
-        'Customer Registered',
-        `${customer.name} has been added successfully. Would you like to create an order now?`,
-        [
-          {
-            text: 'View Profile',
-            onPress: () => router.replace(`/(tabs)/customers/${customer.id}` as any),
-          },
-          {
-            text: 'Create Order',
-            onPress: () => router.replace(`/(tabs)/orders/new?customerId=${customer.id}` as any),
-            style: 'default',
-          },
-        ],
-      );
-    } catch (err: any) {
-      const status = err.response?.status;
-      const message = err.response?.data?.message || err.message || 'Failed to create customer';
-
-      if (status === 409) {
-        setErrorMessage(
-          'A customer with this WhatsApp number already exists. Returning customers do not need duplicate registration.',
-        );
-      } else {
-        setErrorMessage(message);
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSubmit = (values: CustomerFormValues) => {
+    setDuplicateError(null);
+    createMutation.mutate(values);
   };
+
+  if (savedCustomer) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.successContainer}>
+          <Card style={styles.successCard}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-circle" size={64} color={Colors.success} />
+            </View>
+            <Text style={styles.successTitle}>Customer Saved!</Text>
+            <Text style={styles.successName}>{savedCustomer.name}</Text>
+            <Text style={styles.successPhone}>{savedCustomer.whatsappNumber}</Text>
+            {savedCustomer.notes ? (
+              <View style={styles.notesPreview}>
+                <Text style={styles.notesPreviewLabel}>Measurements & Notes:</Text>
+                <Text style={styles.notesPreviewText}>{savedCustomer.notes}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.successActions}>
+              <Button
+                label="Create Stitching Order Now"
+                variant="primary"
+                size="lg"
+                onPress={() => {
+                  const id = savedCustomer.id;
+                  setSavedCustomer(null);
+                  router.replace(`/(tabs)/orders/new?customerId=${id}` as any);
+                }}
+              />
+              <Button
+                label="View Customer Profile"
+                variant="outline"
+                size="md"
+                onPress={() => {
+                  const id = savedCustomer.id;
+                  setSavedCustomer(null);
+                  router.replace(`/(tabs)/customers/${id}` as any);
+                }}
+              />
+              <Button
+                label="Back to Customers List"
+                variant="ghost"
+                size="md"
+                onPress={() => {
+                  setSavedCustomer(null);
+                  router.replace('/(tabs)/customers' as any);
+                }}
+              />
+            </View>
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => router.back()}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="arrow-back" size={24} color={Colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.title}>Register Customer</Text>
-          </View>
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Add New Customer</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-          <Text style={styles.subtitle}>
-            Register the customer using her WhatsApp number. Customers do not need to install the app.
-          </Text>
-
-          {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={18} color={Colors.error} />
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.card}>
-            <CustomerForm
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-              submitLabel="Save Customer & Continue"
-            />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <CustomerForm
+        onSubmit={handleSubmit}
+        isLoading={createMutation.isPending}
+        submitLabel="Save Customer"
+        duplicateError={duplicateError}
+      />
     </SafeAreaView>
   );
 }
@@ -117,58 +139,84 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxl + 20,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.xs,
-    paddingTop: Spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+    backgroundColor: Colors.surface,
   },
   backBtn: {
-    padding: Spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: {
+  headerTitle: {
+    ...Typography.headline,
+    color: Colors.text,
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  successCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+  },
+  successIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#E8F8EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  successTitle: {
     ...Typography.title2,
     fontWeight: '800',
     color: Colors.text,
   },
-  subtitle: {
-    ...Typography.caption1,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
-    paddingHorizontal: 4,
+  successName: {
+    ...Typography.title3,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginTop: Spacing.xs,
   },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFF2F2',
-    padding: Spacing.md,
-    borderRadius: 12,
+  successPhone: {
+    ...Typography.subhead,
+    color: Colors.textSecondary,
+    marginTop: 2,
     marginBottom: Spacing.md,
   },
-  errorText: {
-    ...Typography.caption1,
-    color: Colors.error,
-    flex: 1,
-  },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
+  notesPreview: {
+    width: '100%',
+    backgroundColor: '#FAF7F2',
+    padding: Spacing.md,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 3,
+    marginBottom: Spacing.md,
+  },
+  notesPreviewLabel: {
+    ...Typography.caption1,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  notesPreviewText: {
+    ...Typography.subhead,
+    color: Colors.text,
+  },
+  successActions: {
+    width: '100%',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
 });

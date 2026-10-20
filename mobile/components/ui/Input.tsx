@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   TextInputProps,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
-import { BorderRadius, Spacing } from '@/theme/spacing';
+import { Spacing } from '@/theme/spacing';
 
 interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -41,6 +42,7 @@ export function Input({
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   const effectiveSecure = isPassword ? !showPassword : props.secureTextEntry;
   const effectiveRightIcon = isPassword
@@ -50,14 +52,22 @@ export function Input({
     ? () => setShowPassword((v) => !v)
     : onRightIconPress;
 
+  const isEditable = props.editable !== false;
+
   return (
-    <View style={[styles.container, containerStyle, style]}>
+    <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View
+      <Pressable
+        onPress={() => {
+          if (isEditable && inputRef.current) {
+            inputRef.current.focus();
+          }
+        }}
         style={[
           styles.inputContainer,
           isFocused && styles.focused,
           error ? styles.hasError : undefined,
+          !isEditable && styles.disabledContainer,
         ]}
       >
         {leftIcon && (
@@ -69,10 +79,22 @@ export function Input({
           />
         )}
         <TextInput
-          style={[styles.input, inputStyle]}
+          ref={inputRef}
+          style={[
+            styles.input,
+            props.multiline && styles.multilineInput,
+            style,
+            inputStyle,
+          ]}
           placeholderTextColor={Colors.placeholder}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur?.(e);
+          }}
           secureTextEntry={effectiveSecure}
           {...props}
         />
@@ -85,7 +107,7 @@ export function Input({
             />
           </TouchableOpacity>
         )}
-      </View>
+      </Pressable>
       {error && <Text style={styles.error}>{error}</Text>}
       {hint && !error && <Text style={styles.hint}>{hint}</Text>}
     </View>
@@ -107,12 +129,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F2',
     borderRadius: 18,
     borderWidth: 1.2,
-    borderColor: 'rgba(201, 169, 110, 0.35)', // Subtle gold border
+    borderColor: 'rgba(201, 169, 110, 0.35)',
     minHeight: 52,
     paddingHorizontal: Spacing[4],
   },
   focused: {
-    borderColor: '#6B2D3E', // Royal Burgundy focus
+    borderColor: '#6B2D3E',
     backgroundColor: '#FFFFFF',
     shadowColor: '#6B2D3E',
     shadowOffset: { width: 0, height: 2 },
@@ -120,14 +142,23 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  disabledContainer: {
+    backgroundColor: '#F3EFEA',
+    opacity: 0.75,
+  },
   hasError: {
     borderColor: Colors.error,
   },
   input: {
     flex: 1,
     ...Typography.body,
+    fontSize: 16,
     color: Colors.text,
     paddingVertical: Spacing[3],
+  },
+  multilineInput: {
+    minHeight: 84,
+    textAlignVertical: 'top',
   },
   leftIcon: {
     marginRight: Spacing[2],

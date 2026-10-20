@@ -37,6 +37,10 @@ export default function OrderDetailScreen() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeliveryConfirmOpen, setIsDeliveryConfirmOpen] = useState(false);
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [feedbackBanner, setFeedbackBanner] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Fetch Order
   const {
@@ -58,10 +62,18 @@ export default function OrderDetailScreen() {
       queryClient.setQueryData(['order-detail', id], updated);
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      Alert.alert('Status Updated', `Order #${updated.orderNumber} is now ${updated.status}. Customer notification queued.`);
+      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
+      setFeedbackBanner({
+        type: 'success',
+        message: `Order #${updated.orderNumber} marked as ${updated.status}!`,
+      });
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.response?.data?.message || err.message || 'Failed to update order status');
+      setFeedbackBanner({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to update order status',
+      });
     },
   });
 
@@ -72,11 +84,19 @@ export default function OrderDetailScreen() {
       queryClient.setQueryData(['order-detail', id], updated);
       queryClient.invalidateQueries({ queryKey: ['orders-list'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-detail'] });
       setIsPaymentModalOpen(false);
-      Alert.alert('Payment Recorded', `Payment successfully added to Order #${updated.orderNumber}.`);
+      setFeedbackBanner({
+        type: 'success',
+        message: `Payment recorded for Order #${updated.orderNumber}! Remaining balance: ₹${updated.balanceDue}`,
+      });
     },
     onError: (err: any) => {
-      Alert.alert('Payment Error', err.response?.data?.message || err.message || 'Failed to record payment');
+      setFeedbackBanner({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to record payment',
+      });
     },
   });
 
@@ -85,9 +105,15 @@ export default function OrderDetailScreen() {
     try {
       await whatsappApi.retryMessage(messageId);
       refetch();
-      Alert.alert('Message Queued', 'Retry initiated for this notification.');
+      setFeedbackBanner({
+        type: 'success',
+        message: 'WhatsApp notification resent successfully!',
+      });
     } catch (err: any) {
-      Alert.alert('Retry Failed', err.message);
+      setFeedbackBanner({
+        type: 'error',
+        message: err.message || 'Retry failed',
+      });
     }
   };
 
@@ -100,11 +126,15 @@ export default function OrderDetailScreen() {
   const handleCustomerWhatsApp = async () => {
     if (!order?.customer?.whatsappNumber) return;
     const clean = order.customer.whatsappNumber.replace(/[^0-9]/g, '');
-    const url = `whatsapp://send?phone=${clean}`;
-    const can = await Linking.canOpenURL(url);
-    if (can) {
-      Linking.openURL(url);
+    let statusText = `is currently *${order.status}*`;
+    if (order.status === 'COMPLETED') {
+      statusText = `is *READY FOR PICKUP* 🎉`;
+    } else if (order.status === 'DELIVERED') {
+      statusText = `has been *DELIVERED* ✅`;
     }
+    const text = `Namaste ${order.customer.name}! 🙏\nYour stitching order *${order.orderNumber}* at Bhagyashri Tailoring ${statusText}.\n\n• Total Bill: ₹${order.finalTotal}\n• Balance Due: ₹${order.balanceDue}\n\nThank you! 🪡✨`;
+    const url = `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
+    await Linking.openURL(url);
   };
 
   if (isLoading) {
@@ -162,6 +192,38 @@ export default function OrderDetailScreen() {
             <Text style={styles.createdDate}>{formatDate(order.createdAt)}</Text>
           </View>
         </View>
+
+        {feedbackBanner ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              padding: Spacing.md,
+              borderRadius: 16,
+              marginBottom: Spacing.md,
+              backgroundColor: feedbackBanner.type === 'success' ? '#E8F8EE' : '#FFF2F2',
+              borderWidth: 1,
+              borderColor: feedbackBanner.type === 'success' ? '#A3E4B7' : '#F5B7B1',
+            }}
+          >
+            <Ionicons
+              name={feedbackBanner.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+              size={20}
+              color={feedbackBanner.type === 'success' ? Colors.success : Colors.error}
+            />
+            <Text
+              style={{
+                ...Typography.subhead,
+                fontWeight: '600',
+                flex: 1,
+                color: feedbackBanner.type === 'success' ? '#1E7E34' : Colors.error,
+              }}
+            >
+              {feedbackBanner.message}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Customer Info Card */}
         <View style={styles.customerCard}>

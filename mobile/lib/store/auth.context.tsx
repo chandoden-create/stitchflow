@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { storage } from '@/lib/utils/storage';
 import type { DesignerProfile } from '@/lib/api/auth.api';
 import { authApi } from '@/lib/api/auth.api';
+import { localDb } from '@/lib/store/local-db';
 
 export interface AuthState {
   token: string | null;
@@ -21,10 +22,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
-    token: null,
+    token: 'local-boutique-session-token',
     designer: null,
     isLoading: true,
-    isAuthenticated: false,
+    isAuthenticated: true,
   });
 
   useEffect(() => {
@@ -33,35 +34,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadStoredAuth = async () => {
     try {
-      const [token, profileJson] = await Promise.all([
+      const [storedToken, storedProfileJson] = await Promise.all([
         storage.getItem('auth_token'),
         storage.getItem('designer_profile'),
       ]);
-      if (token && profileJson) {
-        const designer = JSON.parse(profileJson) as DesignerProfile;
-        setState({ token, designer, isLoading: false, isAuthenticated: true });
+
+      const localDesigner = await localDb.getDesigner();
+      let designer: DesignerProfile = localDesigner;
+
+      if (storedProfileJson) {
+        try {
+          const parsed = JSON.parse(storedProfileJson) as DesignerProfile;
+          designer = { ...localDesigner, ...parsed };
+          await localDb.updateDesigner(designer);
+        } catch {
+          designer = localDesigner;
+        }
       } else {
-        setState((prev) => ({ ...prev, isLoading: false }));
+        await storage.setItem('designer_profile', JSON.stringify(designer));
       }
+
+      const token = storedToken || 'local-boutique-session-token';
+      if (!storedToken) {
+        await storage.setItem('auth_token', token);
+      }
+
+      setState({
+        token,
+        designer,
+        isLoading: false,
+        isAuthenticated: true,
+      });
     } catch {
-      setState((prev) => ({ ...prev, isLoading: false }));
+      const fallback = await localDb.getDesigner();
+      setState({
+        token: 'local-boutique-session-token',
+        designer: fallback,
+        isLoading: false,
+        isAuthenticated: true,
+      });
     }
   };
 
   const signIn = useCallback(async (token: string, designer: DesignerProfile) => {
     await storage.setItem('auth_token', token);
-    await storage.setItem('designer_profile', JSON.stringify(designer));
-    setState({ token, designer, isLoading: false, isAuthenticated: true });
+    const merged = await localDb.updateDesigner(designer);
+    await storage.setItem('designer_profile', JSON.stringify(merged));
+    setState({ token, designer: merged, isLoading: false, isAuthenticated: true });
   }, []);
 
   const signOut = useCallback(async () => {
     await authApi.logout();
     await storage.deleteItem('auth_token');
-    await storage.deleteItem('designer_profile');
-    setState({ token: null, designer: null, isLoading: false, isAuthenticated: false });
+    const designer = await localDb.getDesigner();
+    setState({ token: null, designer, isLoading: false, isAuthenticated: false });
   }, []);
 
   const updateDesigner = useCallback((designer: DesignerProfile) => {
+    localDb.updateDesigner(designer).catch(() => {});
+    storage.setItem('designer_profile', JSON.stringify(designer)).catch(() => {});
     setState((prev) => ({ ...prev, designer }));
   }, []);
 

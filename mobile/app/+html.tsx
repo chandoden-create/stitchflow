@@ -29,10 +29,10 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#6B2D3E" />
         
         {/* iOS App Icons */}
-        <link rel="apple-touch-icon" href="/assets/icon.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/assets/icon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/assets/icon.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/assets/icon.png" />
+        <link rel="apple-touch-icon" href="/icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/icon.png" />
 
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: `
@@ -43,11 +43,14 @@ export default function RootHtml({ children }: PropsWithChildren) {
             padding: 0;
             overflow: hidden;
             background-color: #FDFAF6;
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          }
+          input, textarea {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            font-size: 16px !important;
+            outline: none !important;
           }
           /* Hide scrollbar for a clean mobile app feel */
           ::-webkit-scrollbar {

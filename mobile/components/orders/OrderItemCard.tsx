@@ -31,7 +31,12 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
   index,
 }) => {
   const garmentConfig = getGarmentTypeConfig(item.garmentType);
-  const photoUri = item.localPhotoUri || item.photos?.[0]?.uri;
+  const photoUri =
+    (item as any).photoUri ||
+    item.localPhotoUri ||
+    (item.photos?.[0] as any)?.presignedUrl ||
+    (item.photos?.[0] as any)?.url ||
+    item.photos?.[0]?.uri;
   const lineTotal = item.lineTotal ?? (Number(item.quantity) * Number(item.unitPrice));
 
   return (

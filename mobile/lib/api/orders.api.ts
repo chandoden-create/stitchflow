@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Customer } from './customers.api';
+import { localDb } from '@/lib/store/local-db';
 
 export interface OrderItem {
   id?: string;
@@ -9,6 +10,8 @@ export interface OrderItem {
   unitPrice: number | string;
   lineTotal?: number | string;
   notes?: string;
+  photoUri?: string;
+  localPhotoUri?: string;
   photos?: any[];
   sortOrder?: number;
 }
@@ -70,6 +73,9 @@ export interface CreateOrderData {
     quantity: number;
     unitPrice: string | number;
     notes?: string;
+    photoUri?: string;
+    localPhotoUri?: string;
+    photos?: any[];
     sortOrder?: number;
   }>;
   discount?: string | number;
@@ -113,34 +119,34 @@ export const ordersApi = {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<OrdersListResponse> => {
-    const { data } = await apiClient.get<OrdersListResponse>('/orders', { params });
-    return data;
+    return localDb.listOrders(params);
   },
 
   list: async (params?: any): Promise<OrdersListResponse> => {
-    return ordersApi.getAll(params);
+    return localDb.listOrders(params);
   },
 
   getById: async (id: string): Promise<Order> => {
-    const { data } = await apiClient.get<Order>(`/orders/${id}`);
-    return data;
+    return localDb.getOrderById(id);
   },
 
   get: async (id: string): Promise<Order> => {
-    return ordersApi.getById(id);
+    return localDb.getOrderById(id);
   },
 
   create: async (orderData: CreateOrderData): Promise<Order> => {
-    const { data } = await apiClient.post<Order>('/orders', orderData);
-    return data;
+    const created = await localDb.createOrder(orderData);
+    apiClient.post<Order>('/orders', orderData, { timeout: 3500 }).catch(() => {});
+    return created;
   },
 
   updateStatus: async (
     id: string,
     dto: { status: string; notes?: string },
   ): Promise<Order> => {
-    const { data } = await apiClient.put<Order>(`/orders/${id}/status`, dto);
-    return data;
+    const updated = await localDb.updateOrderStatus(id, dto);
+    apiClient.put<Order>(`/orders/${id}/status`, dto, { timeout: 3500 }).catch(() => {});
+    return updated;
   },
 
   addPayment: async (
@@ -153,8 +159,9 @@ export const ordersApi = {
       receivedAt?: string;
     },
   ): Promise<Order> => {
-    const { data } = await apiClient.post<Order>(`/orders/${id}/payments`, dto);
-    return data;
+    const updated = await localDb.addPayment(id, dto);
+    apiClient.post<Order>(`/orders/${id}/payments`, dto, { timeout: 3500 }).catch(() => {});
+    return updated;
   },
 
   recordPayment: async (id: string, payment: any): Promise<Order> => {
@@ -162,16 +169,12 @@ export const ordersApi = {
   },
 
   getDashboardStats: async (): Promise<DashboardStats> => {
-    const { data } = await apiClient.get<DashboardStats>('/orders/dashboard');
-    return data;
+    return localDb.getDashboardStats();
   },
 
   retryWhatsApp: async (orderId: string, messageId: string): Promise<any> => {
-    try {
-      const { data } = await apiClient.post(`/whatsapp/retry/${messageId}`);
-      return data;
-    } catch {
-      return { success: true };
-    }
+    await localDb.retryWhatsAppMessage(messageId);
+    apiClient.post(`/whatsapp/retry/${messageId}`, {}, { timeout: 2500 }).catch(() => {});
+    return { success: true };
   },
 };

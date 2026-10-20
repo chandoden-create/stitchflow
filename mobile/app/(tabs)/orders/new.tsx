@@ -8,10 +8,10 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { Typography } from '../../../theme/typography';
@@ -27,6 +27,7 @@ import { CurrencyText } from '../../../components/ui/CurrencyText';
 
 export default function NewOrderScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ customerId?: string }>();
 
   // State
@@ -43,6 +44,13 @@ export default function NewOrderScreen() {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<any | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (params.customerId) {
+      setSelectedCustomerId(params.customerId);
+    }
+  }, [params.customerId]);
 
   // Fetch customers for selector
   const { data: customersData } = useQuery({
@@ -81,18 +89,19 @@ export default function NewOrderScreen() {
   };
 
   const handleSubmitOrder = async () => {
+    setValidationError(null);
     if (!selectedCustomerId) {
-      Alert.alert('Customer Required', 'Please select or register a customer for this order.');
+      setValidationError('Please select or register a customer for this order.');
       return;
     }
 
     if (items.length === 0) {
-      Alert.alert('Garments Required', 'Please add at least one garment item to the order.');
+      setValidationError('Please add at least one garment item to the order.');
       return;
     }
 
     if (advanceNum > finalTotal) {
-      Alert.alert('Invalid Advance', 'Advance payment cannot exceed the final order total.');
+      setValidationError('Advance payment cannot exceed the final order total.');
       return;
     }
 
@@ -106,6 +115,8 @@ export default function NewOrderScreen() {
           quantity: it.quantity,
           unitPrice: it.unitPrice,
           notes: it.notes,
+          photoUri: it.photoUri,
+          localPhotoUri: it.photoUri,
           sortOrder: idx,
         })),
         discount: discountNum > 0 ? discountNum.toFixed(2) : undefined,
@@ -115,10 +126,14 @@ export default function NewOrderScreen() {
       };
 
       const result = await ordersApi.create(orderPayload);
+      queryClient.invalidateQueries({ queryKey: ['orders-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-detail', selectedCustomerId] });
       setSubmittedOrder(result);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to submit order';
-      Alert.alert('Submission Error', msg);
+      setValidationError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -189,6 +204,18 @@ export default function NewOrderScreen() {
 
           {/* Actions */}
           <View style={styles.confActions}>
+            {submittedOrder.customer?.whatsappNumber ? (
+              <Button
+                label="Send Order Receipt on WhatsApp"
+                variant="primary"
+                onPress={() => {
+                  const clean = submittedOrder.customer.whatsappNumber.replace(/[^0-9]/g, '');
+                  const msg = `Namaste ${submittedOrder.customer.name}! 🙏\nYour stitching order *${submittedOrder.orderNumber}* is registered at Bhagyashri Tailoring.\n\n• Total Amount: ₹${submittedOrder.finalTotal}\n• Advance Paid: ₹${submittedOrder.advanceAmount}\n• Balance Due: ₹${submittedOrder.balanceDue}\n\nThank you! 🪡✨`;
+                  Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`);
+                }}
+                style={{ marginBottom: Spacing.sm, backgroundColor: '#25D366' }}
+              />
+            ) : null}
             <Button
               label="View Order Details"
               variant="primary"
@@ -227,6 +254,27 @@ export default function NewOrderScreen() {
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Create New Order</Text>
           </View>
+
+          {validationError ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: '#FFF2F2',
+                borderColor: Colors.error,
+                borderWidth: 1,
+                padding: Spacing.md,
+                borderRadius: 14,
+                marginBottom: Spacing.md,
+              }}
+            >
+              <Ionicons name="alert-circle" size={20} color={Colors.error} />
+              <Text style={{ ...Typography.subhead, color: Colors.error, flex: 1, fontWeight: '600' }}>
+                {validationError}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Step 1: Customer Selection */}
           <View style={styles.sectionCard}>

@@ -42,13 +42,8 @@ export default function CustomerDetailScreen() {
   const handleWhatsApp = async () => {
     if (!customer?.whatsappNumber) return;
     const clean = customer.whatsappNumber.replace(/[^0-9]/g, '');
-    const url = `whatsapp://send?phone=${clean}`;
-    const can = await Linking.canOpenURL(url);
-    if (can) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('Notice', 'WhatsApp application is not installed on this device.');
-    }
+    const url = `https://wa.me/${clean}`;
+    await Linking.openURL(url);
   };
 
   const handleCall = async () => {
