@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { storage } from '@/lib/utils/storage';
 import type { DesignerProfile } from '@/lib/api/auth.api';
 import { authApi } from '@/lib/api/auth.api';
-import { localDb } from '@/lib/store/local-db';
+import { localDb, DEFAULT_DESIGNER } from '@/lib/store/local-db';
 
 export interface AuthState {
   token: string | null;
@@ -23,8 +23,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     token: 'local-boutique-session-token',
-    designer: null,
-    isLoading: true,
+    designer: DEFAULT_DESIGNER,
+    isLoading: false,
     isAuthenticated: true,
   });
 

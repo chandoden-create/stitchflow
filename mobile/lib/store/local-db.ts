@@ -12,7 +12,7 @@ export interface LocalDatabaseSchema {
   nextOrderSeq: number;
 }
 
-const DEFAULT_DESIGNER: DesignerProfile = {
+export const DEFAULT_DESIGNER: DesignerProfile = {
   id: 'designer-bhagyashri-01',
   name: 'Bhagyashri',
   designerName: 'Bhagyashri',
