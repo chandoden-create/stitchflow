@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "StitchFlow",
+    "slug": "stitchflow",
+    "version": "1.0.0",
+    "scheme": "stitchflow",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6B2D3E"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.stitchflow.mobile",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6B2D3E"
+      },
+      "package": "com.stitchflow.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow StitchFlow to access your camera to photograph garments."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow StitchFlow to access your photos to attach garment images."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,72 @@
+services:
+  # StitchFlow NestJS Backend API
+  - type: web
+    name: stitchflow-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
+    startCommand: npx prisma db push && npm run prisma:seed && npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stitchflow-db
+          property: connectionString
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: stitchflow-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: stitchflow-redis
+          property: port
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: WHATSAPP_SANDBOX_MODE
+        value: "true"
+      - key: WHATSAPP_VERIFY_TOKEN
+        value: stitchflow-webhook-verify
+
+  # StitchFlow Mobile Web Frontend
+  - type: web
+    name: stitchflow-mobile
+    env: static
+    plan: free
+    rootDir: mobile
+    buildCommand: npm install --legacy-peer-deps --ignore-scripts && npx expo export --platform web
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: EXPO_PUBLIC_APP_NAME
+        value: StitchFlow
+      - key: EXPO_PUBLIC_CURRENCY_SYMBOL
+        value: "₹"
+      - key: EXPO_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: stitchflow-backend
+          property: url
+
+databases:
+  # Managed PostgreSQL Database
+  - name: stitchflow-db
+    plan: free
+    databaseName: stitchflow
+    user: stitchflow
+
+  # Managed Redis Cache
+  - name: stitchflow-redis
+    plan: free
+    ipAllowList: []

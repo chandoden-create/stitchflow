@@ -1,0 +1,232 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Designer {
+  id                      String   @id @default(cuid())
+  name                    String
+  businessName            String   @map("business_name")
+  email                   String   @unique
+  phone                   String?
+  address                 String?
+  logoUrl                 String?  @map("logo_url")
+  currency                String   @default("INR")
+  currencySymbol          String   @default("₹") @map("currency_symbol")
+  whatsappPhoneNumberId   String?  @map("whatsapp_phone_number_id")
+  whatsappAccessToken     String?  @map("whatsapp_access_token")
+  whatsappSandboxMode     Boolean  @default(true) @map("whatsapp_sandbox_mode")
+  messageSignature        String?  @map("message_signature")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  userAccount      UserAccount?
+  customers        Customer[]
+  orders           Order[]
+  whatsappMessages WhatsAppMessage[]
+
+  @@map("designers")
+}
+
+model UserAccount {
+  id                  String    @id @default(cuid())
+  designerId          String    @unique @map("designer_id")
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  isVerified          Boolean   @default(false) @map("is_verified")
+  passwordResetToken  String?   @map("password_reset_token")
+  passwordResetExpiry DateTime? @map("password_reset_expiry")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  designer Designer @relation(fields: [designerId], references: [id], onDelete: Cascade)
+
+  @@map("user_accounts")
+}
+
+model Customer {
+  id                String        @id @default(cuid())
+  designerId        String        @map("designer_id")
+  name              String
+  whatsappNumber    String        @map("whatsapp_number")
+  altPhone          String?       @map("alt_phone")
+  notes             String?
+  consentStatus     ConsentStatus @default(PENDING) @map("consent_status")
+  consentRecordedAt DateTime?     @map("consent_recorded_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  designer         Designer          @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  orders           Order[]
+  whatsappMessages WhatsAppMessage[]
+
+  @@unique([designerId, whatsappNumber])
+  @@map("customers")
+}
+
+enum ConsentStatus {
+  PENDING
+  GIVEN
+  REVOKED
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  designerId        String      @map("designer_id")
+  customerId        String      @map("customer_id")
+  orderNumber       String      @unique @map("order_number")
+  status            OrderStatus @default(RECEIVED)
+  subtotal          Decimal     @db.Decimal(10, 2)
+  discount          Decimal     @default(0) @db.Decimal(10, 2)
+  additionalCharges Decimal     @default(0) @db.Decimal(10, 2) @map("additional_charges")
+  finalTotal        Decimal     @db.Decimal(10, 2) @map("final_total")
+  advanceAmount     Decimal     @default(0) @db.Decimal(10, 2) @map("advance_amount")
+  balanceDue        Decimal     @db.Decimal(10, 2) @map("balance_due")
+  dueDate           DateTime?   @map("due_date")
+  completedAt       DateTime?   @map("completed_at")
+  deliveredAt       DateTime?   @map("delivered_at")
+  notes             String?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  designer      Designer             @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  customer      Customer             @relation(fields: [customerId], references: [id])
+  items         OrderItem[]
+  payments      Payment[]
+  statusHistory OrderStatusHistory[]
+  whatsappMessages WhatsAppMessage[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String      @id @default(cuid())
+  orderId     String      @map("order_id")
+  garmentType GarmentType @map("garment_type")
+  description String
+  quantity    Int         @default(1)
+  unitPrice   Decimal     @db.Decimal(10, 2) @map("unit_price")
+  lineTotal   Decimal     @db.Decimal(10, 2) @map("line_total")
+  notes       String?
+  sortOrder   Int         @default(0) @map("sort_order")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  order  Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  photos GarmentPhoto[]
+
+  @@map("order_items")
+}
+
+enum GarmentType {
+  BLOUSE_STITCHING
+  BLOUSE_FITTING
+  DRESS_STITCHING
+  PANT_FITTING
+  KURTI_STITCHING
+  ALTERATION
+  OTHER
+}
+
+model GarmentPhoto {
+  id          String   @id @default(cuid())
+  orderItemId String   @map("order_item_id")
+  storageKey  String   @map("storage_key")
+  contentType String   @default("image/jpeg") @map("content_type")
+  sizeBytes   Int?     @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@map("garment_photos")
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String        @map("order_id")
+  amount         Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod @map("payment_method")
+  transactionRef String?       @map("transaction_ref")
+  notes          String?
+  receivedAt     DateTime      @map("received_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+model OrderStatusHistory {
+  id             String       @id @default(cuid())
+  orderId        String       @map("order_id")
+  previousStatus OrderStatus? @map("previous_status")
+  newStatus      OrderStatus  @map("new_status")
+  changedBy      String       @map("changed_by")
+  notes          String?
+  changedAt      DateTime     @default(now()) @map("changed_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_status_history")
+}
+
+model WhatsAppMessage {
+  id                String          @id @default(cuid())
+  designerId        String          @map("designer_id")
+  customerId        String          @map("customer_id")
+  orderId           String?         @map("order_id")
+  messageType       WaMessageType   @map("message_type")
+  providerMessageId String?         @map("provider_message_id")
+  status            WaMessageStatus @default(QUEUED)
+  errorCode         String?         @map("error_code")
+  errorMessage      String?         @map("error_message")
+  attemptCount      Int             @default(0) @map("attempt_count")
+  templatePayload   Json            @map("template_payload")
+  queuedAt          DateTime        @default(now()) @map("queued_at")
+  sentAt            DateTime?       @map("sent_at")
+  deliveredAt       DateTime?       @map("delivered_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  designer Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id])
+  order    Order?    @relation(fields: [orderId], references: [id])
+
+  @@map("whatsapp_messages")
+}
+
+enum WaMessageType {
+  ORDER_RECEIVED
+  ORDER_COMPLETED
+  ORDER_DELIVERED
+}
+
+enum WaMessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  FAILED
+  MOCK_SENT
+}
