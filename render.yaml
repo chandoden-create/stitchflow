@@ -31,8 +31,9 @@ services:
         value: stitchflow-webhook-verify
 
   # StitchFlow Mobile Web Frontend
-  - type: static
+  - type: web
     name: stitchflow-mobile
+    env: static
     rootDir: mobile
     buildCommand: npm install --legacy-peer-deps --ignore-scripts && npx expo export --platform web
     staticPublishPath: dist
