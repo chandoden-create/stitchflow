@@ -836,4 +836,104 @@ export const localDb = {
       recentOrders,
     };
   },
+
+  async syncCloudCustomers(cloudCustomers: any[]): Promise<void> {
+    if (!Array.isArray(cloudCustomers) || cloudCustomers.length === 0) return;
+    const db = await readDb();
+    const nowIso = new Date().toISOString();
+
+    for (const cc of cloudCustomers) {
+      if (!cc || !cc.id) continue;
+      const cleanPhone = normalizeIndianPhone(cc.whatsappNumber || '');
+      const existingIdx = db.customers.findIndex(
+        (c) => c.id === cc.id || (cleanPhone && normalizeIndianPhone(c.whatsappNumber) === cleanPhone)
+      );
+
+      const mapped: Customer = {
+        id: cc.id,
+        name: cc.name || 'Unnamed Customer',
+        whatsappNumber: cleanPhone || cc.whatsappNumber,
+        altPhone: cc.altPhone || undefined,
+        notes: cc.notes || undefined,
+        consentStatus: cc.consentStatus || 'GIVEN',
+        whatsappConsent: cc.consentStatus === 'GIVEN',
+        createdAt: cc.createdAt || nowIso,
+        updatedAt: cc.updatedAt || nowIso,
+      };
+
+      if (existingIdx !== -1) {
+        db.customers[existingIdx] = { ...db.customers[existingIdx], ...mapped };
+      } else {
+        db.customers.unshift(mapped);
+      }
+    }
+    await writeDb(db);
+  },
+
+  async syncCloudOrders(cloudOrders: any[]): Promise<void> {
+    if (!Array.isArray(cloudOrders) || cloudOrders.length === 0) return;
+    const db = await readDb();
+
+    for (const co of cloudOrders) {
+      if (!co || !co.id) continue;
+      const existingIdx = db.orders.findIndex(
+        (o) => o.id === co.id || (co.orderNumber && o.orderNumber === co.orderNumber)
+      );
+
+      const mapped: Order = {
+        id: co.id,
+        orderNumber: co.orderNumber,
+        customerId: co.customerId,
+        status: co.status,
+        subtotal: String(co.subtotal ?? '0.00'),
+        discount: String(co.discount ?? '0.00'),
+        additionalCharges: String(co.additionalCharges ?? '0.00'),
+        finalTotal: String(co.finalTotal ?? '0.00'),
+        advanceAmount: String(co.advanceAmount ?? '0.00'),
+        balanceDue: String(co.balanceDue ?? '0.00'),
+        dueDate: co.dueDate ? co.dueDate.split('T')[0] : undefined,
+        completedAt: co.completedAt,
+        deliveredAt: co.deliveredAt,
+        notes: co.notes,
+        items: Array.isArray(co.items)
+          ? co.items.map((it: any, idx: number) => ({
+              id: it.id || `item-${idx}`,
+              garmentType: it.garmentType,
+              description: it.description,
+              quantity: Number(it.quantity) || 1,
+              unitPrice: String(it.unitPrice),
+              lineTotal: String(it.lineTotal),
+              notes: it.notes,
+              photos: it.photos || [],
+              sortOrder: it.sortOrder ?? idx,
+            }))
+          : [],
+        payments: Array.isArray(co.payments)
+          ? co.payments.map((p: any, idx: number) => ({
+              id: p.id || `pay-${idx}`,
+              amount: String(p.amount),
+              paymentMethod: p.paymentMethod || 'CASH',
+              transactionRef: p.transactionRef,
+              notes: p.notes,
+              receivedAt: p.receivedAt,
+            }))
+          : [],
+        statusHistory: co.statusHistory || [],
+        whatsappMessages: co.whatsappMessages || [],
+        createdAt: co.createdAt,
+        updatedAt: co.updatedAt,
+      };
+
+      if (existingIdx !== -1) {
+        db.orders[existingIdx] = { ...db.orders[existingIdx], ...mapped };
+      } else {
+        db.orders.unshift(mapped);
+      }
+    }
+    await writeDb(db);
+  },
+
+  async getAllLocalData() {
+    return readDb();
+  },
 };

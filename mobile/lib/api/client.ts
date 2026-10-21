@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { storage } from '@/lib/utils/storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+export const CLOUD_API_URL = 'https://stitchflow-api-chandoden.onrender.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || CLOUD_API_URL;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -10,8 +11,12 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
+  const customUrl = await storage.getItem('custom_api_url');
+  if (customUrl) {
+    config.baseURL = customUrl;
+  }
   const token = await storage.getItem('auth_token');
-  if (token) {
+  if (token && token !== 'local-boutique-session-token') {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -26,10 +31,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
-      await storage.deleteItem('auth_token');
-      await storage.deleteItem('designer_profile');
-    }
     return Promise.reject(error);
   }
 );

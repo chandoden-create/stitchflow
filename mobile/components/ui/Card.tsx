@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { BorderRadius, Spacing } from '@/theme/spacing';
 import { Shadows } from '@/theme/shadows';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   padding?: number;
   shadow?: 'none' | 'sm' | 'md' | 'lg';
 }

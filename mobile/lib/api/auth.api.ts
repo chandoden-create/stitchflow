@@ -42,11 +42,82 @@ export interface DesignerProfile {
 }
 
 export const authApi = {
+  ensureBackendAuth: async (): Promise<{ token: string; designer: DesignerProfile } | null> => {
+    try {
+      const existingToken = await storage.getItem('auth_token');
+      // If we already have a real JWT token (not a mock token)
+      if (
+        existingToken &&
+        existingToken !== 'local-boutique-session-token' &&
+        existingToken.split('.').length === 3
+      ) {
+        try {
+          const { data } = await apiClient.get<any>('/auth/me', { timeout: 6000 });
+          if (data && data.id) {
+            const designer = await localDb.updateDesigner(data);
+            return { token: existingToken, designer };
+          }
+        } catch (err: any) {
+          if (err.response?.status !== 401) {
+            const localDesigner = await localDb.getDesigner();
+            return { token: existingToken, designer: localDesigner };
+          }
+        }
+      }
+
+      // Try logging in with seeded admin credentials
+      try {
+        const { data } = await apiClient.post<any>(
+          '/auth/login',
+          { email: 'admin@stitchflow.app', password: 'Demo@1234' },
+          { timeout: 10000 }
+        );
+        const accessToken = data?.accessToken || data?.token;
+        if (accessToken) {
+          const designer = await localDb.updateDesigner(data.designer || { email: 'admin@stitchflow.app' });
+          await storage.setItem('auth_token', accessToken);
+          await storage.setItem('designer_profile', JSON.stringify(designer));
+          return { token: accessToken, designer };
+        }
+      } catch (loginErr: any) {
+        // If account doesn't exist yet on fresh database, auto-register
+        if (loginErr.response?.status === 401 || loginErr.response?.status === 404) {
+          try {
+            const { data } = await apiClient.post<any>(
+              '/auth/register',
+              {
+                name: 'Bhagyashri',
+                businessName: 'Bhagyashri Tailoring',
+                email: 'admin@stitchflow.app',
+                password: 'Demo@1234',
+                phone: '+919876543210',
+                address: '12, Shivaji Nagar, Pune, Maharashtra 411005',
+              },
+              { timeout: 10000 }
+            );
+            const accessToken = data?.accessToken || data?.token;
+            if (accessToken) {
+              const designer = await localDb.updateDesigner(data.designer || { email: 'admin@stitchflow.app' });
+              await storage.setItem('auth_token', accessToken);
+              await storage.setItem('designer_profile', JSON.stringify(designer));
+              return { token: accessToken, designer };
+            }
+          } catch {
+            // Register failed, continue to local fallback
+          }
+        }
+      }
+    } catch {
+      // Offline / Render waking up
+    }
+    return null;
+  },
+
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     try {
-      const { data } = await apiClient.post<any>('/auth/login', credentials, { timeout: 3500 });
-      const accessToken = data.accessToken || data.token || 'local-boutique-session-token';
-      const designer = await localDb.updateDesigner(data.designer || { email: credentials.email });
+      const { data } = await apiClient.post<any>('/auth/login', credentials, { timeout: 8000 });
+      const accessToken = data?.accessToken || data?.token || 'local-boutique-session-token';
+      const designer = await localDb.updateDesigner(data?.designer || { email: credentials.email });
       await storage.setItem('auth_token', accessToken);
       await storage.setItem('designer_profile', JSON.stringify(designer));
       return { accessToken, designer };
@@ -62,20 +133,17 @@ export const authApi = {
   register: async (registerData: RegisterData): Promise<AuthResponse> => {
     const payload = {
       name: registerData.name || registerData.designerName || 'Bhagyashri',
-      designerName: registerData.designerName || registerData.name || 'Bhagyashri',
       businessName: registerData.businessName || 'Bhagyashri Tailoring',
       email: registerData.email,
-      phone: registerData.phone,
-      address: registerData.address,
+      password: registerData.password,
+      phone: registerData.phone || undefined,
+      address: registerData.address || undefined,
     };
 
     try {
-      const { data } = await apiClient.post<any>('/auth/register', {
-        ...payload,
-        password: registerData.password,
-      }, { timeout: 3500 });
-      const accessToken = data.accessToken || data.token || 'local-boutique-session-token';
-      const designer = await localDb.updateDesigner({ ...payload, ...(data.designer || {}) });
+      const { data } = await apiClient.post<any>('/auth/register', payload, { timeout: 8000 });
+      const accessToken = data?.accessToken || data?.token || 'local-boutique-session-token';
+      const designer = await localDb.updateDesigner({ ...payload, ...(data?.designer || {}) });
       await storage.setItem('auth_token', accessToken);
       await storage.setItem('designer_profile', JSON.stringify(designer));
       return { accessToken, designer };
@@ -100,7 +168,7 @@ export const authApi = {
 
   forgotPassword: async (email: string): Promise<void> => {
     try {
-      await apiClient.post('/auth/forgot-password', { email }, { timeout: 3000 });
+      await apiClient.post('/auth/forgot-password', { email }, { timeout: 5000 });
     } catch {
       // Handled gracefully
     }
@@ -108,7 +176,7 @@ export const authApi = {
 
   resetPassword: async (token: string, password: string): Promise<void> => {
     try {
-      await apiClient.post('/auth/reset-password', { token, password }, { timeout: 3000 });
+      await apiClient.post('/auth/reset-password', { token, password }, { timeout: 5000 });
     } catch {
       // Handled gracefully
     }
@@ -117,7 +185,7 @@ export const authApi = {
   getProfile: async (): Promise<DesignerProfile> => {
     const localProfile = await localDb.getDesigner();
     try {
-      const { data } = await apiClient.get<DesignerProfile>('/auth/me', { timeout: 2500 });
+      const { data } = await apiClient.get<DesignerProfile>('/auth/me', { timeout: 5000 });
       if (data && data.id) {
         return await localDb.updateDesigner(data);
       }
@@ -129,8 +197,7 @@ export const authApi = {
 
   updateProfile: async (updates: Partial<DesignerProfile>): Promise<DesignerProfile> => {
     const updatedLocal = await localDb.updateDesigner(updates);
-    // Sync to backend in background if available
-    apiClient.put<DesignerProfile>('/auth/me', updates, { timeout: 3500 }).catch(() => {});
+    apiClient.put<DesignerProfile>('/auth/me', updates, { timeout: 6000 }).catch(() => {});
     return updatedLocal;
   },
 };

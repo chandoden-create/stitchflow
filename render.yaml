@@ -1,11 +1,11 @@
 services:
   # StitchFlow NestJS Backend API
   - type: web
-    name: stitchflow-backend
+    name: stitchflow-api-chandoden
     env: node
     plan: free
     rootDir: backend
-    buildCommand: npm install --include=dev --legacy-peer-deps && npx prisma generate && npm run build
+    buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
     startCommand: npx prisma db push && npm run prisma:seed && npm run start:prod
     healthCheckPath: /health
     envVars:
@@ -26,7 +26,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
-        value: 7d
+        value: 365d
       - key: WHATSAPP_SANDBOX_MODE
         value: "true"
       - key: WHATSAPP_VERIFY_TOKEN
@@ -55,7 +55,7 @@ services:
       - key: EXPO_PUBLIC_CURRENCY_SYMBOL
         value: "₹"
       - key: EXPO_PUBLIC_API_URL
-        value: https://stitchflow-backend.onrender.com
+        value: https://stitchflow-api-chandoden.onrender.com
 
 databases:
   # Managed PostgreSQL Database (Free)

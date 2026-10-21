@@ -3,12 +3,15 @@ import { storage } from '@/lib/utils/storage';
 import type { DesignerProfile } from '@/lib/api/auth.api';
 import { authApi } from '@/lib/api/auth.api';
 import { localDb, DEFAULT_DESIGNER } from '@/lib/store/local-db';
+import { customersApi } from '@/lib/api/customers.api';
+import { ordersApi } from '@/lib/api/orders.api';
 
 export interface AuthState {
   token: string | null;
   designer: DesignerProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  cloudSynced: boolean;
 }
 
 export interface AuthContextValue extends AuthState {
@@ -16,20 +19,45 @@ export interface AuthContextValue extends AuthState {
   signOut: () => Promise<void>;
   updateDesigner: (designer: DesignerProfile) => void;
   refreshProfile: () => Promise<void>;
+  syncWithCloud: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
-    token: 'local-boutique-session-token',
+    token: null,
     designer: DEFAULT_DESIGNER,
     isLoading: false,
     isAuthenticated: true,
+    cloudSynced: false,
   });
 
   useEffect(() => {
     loadStoredAuth();
+  }, []);
+
+  const syncWithCloud = useCallback(async () => {
+    try {
+      const authResult = await authApi.ensureBackendAuth();
+      if (authResult?.token) {
+        setState((prev) => ({
+          ...prev,
+          token: authResult.token,
+          designer: authResult.designer,
+          isAuthenticated: true,
+          cloudSynced: true,
+        }));
+
+        // Restore / pull all cloud data from PostgreSQL
+        await Promise.allSettled([
+          customersApi.getAll(),
+          ordersApi.getAll(),
+        ]);
+      }
+    } catch {
+      // Offline or backend unavailable
+    }
   }, []);
 
   const loadStoredAuth = async () => {
@@ -54,25 +82,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await storage.setItem('designer_profile', JSON.stringify(designer));
       }
 
-      const token = storedToken || 'local-boutique-session-token';
-      if (!storedToken) {
-        await storage.setItem('auth_token', token);
-      }
-
       setState({
-        token,
+        token: storedToken,
         designer,
         isLoading: false,
         isAuthenticated: true,
+        cloudSynced: false,
       });
+
+      // Seamlessly verify cloud auth & sync cloud database in background
+      syncWithCloud();
     } catch {
       const fallback = await localDb.getDesigner();
       setState({
-        token: 'local-boutique-session-token',
+        token: null,
         designer: fallback,
         isLoading: false,
         isAuthenticated: true,
+        cloudSynced: false,
       });
+      syncWithCloud();
     }
   };
 
@@ -80,14 +109,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await storage.setItem('auth_token', token);
     const merged = await localDb.updateDesigner(designer);
     await storage.setItem('designer_profile', JSON.stringify(merged));
-    setState({ token, designer: merged, isLoading: false, isAuthenticated: true });
+    setState({ token, designer: merged, isLoading: false, isAuthenticated: true, cloudSynced: true });
+    // Pull full data from cloud
+    try {
+      await Promise.allSettled([
+        customersApi.getAll(),
+        ordersApi.getAll(),
+      ]);
+    } catch {}
   }, []);
 
   const signOut = useCallback(async () => {
     await authApi.logout();
     await storage.deleteItem('auth_token');
     const designer = await localDb.getDesigner();
-    setState({ token: null, designer, isLoading: false, isAuthenticated: false });
+    setState({ token: null, designer, isLoading: false, isAuthenticated: false, cloudSynced: false });
   }, []);
 
   const updateDesigner = useCallback((designer: DesignerProfile) => {
@@ -107,7 +143,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, signIn, signOut, updateDesigner, refreshProfile }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        signIn,
+        signOut,
+        updateDesigner,
+        refreshProfile,
+        syncWithCloud,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

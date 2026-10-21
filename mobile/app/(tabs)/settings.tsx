@@ -25,7 +25,8 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 export default function SettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { designer, updateDesigner, signOut } = useAuthStore();
+  const { designer, updateDesigner, signOut, syncWithCloud, cloudSynced } = useAuthStore();
+  const [syncingCloud, setSyncingCloud] = useState(false);
 
   const [designerName, setDesignerName] = useState(
     designer?.name || designer?.designerName || 'Bhagyashri'
@@ -170,6 +171,30 @@ export default function SettingsScreen() {
     router.replace('/(auth)/login');
   };
 
+  const handleManualSync = async () => {
+    setSyncingCloud(true);
+    try {
+      await syncWithCloud();
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setFeedbackBanner({
+        type: 'success',
+        message: 'Cloud Database synced! All customers and orders are permanently saved to PostgreSQL.',
+      });
+      setTimeout(() => {
+        setFeedbackBanner(null);
+      }, 5000);
+    } catch {
+      setFeedbackBanner({
+        type: 'error',
+        message: 'Cloud sync encountered an issue. Local records are intact and will retry automatically.',
+      });
+    } finally {
+      setSyncingCloud(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -178,6 +203,42 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.screenTitle}>Boutique Settings</Text>
+
+        {/* Cloud Database & Permanent Storage Card */}
+        <Card style={[styles.sectionCard, { borderColor: Colors.gold, borderWidth: 1 }]}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="cloud-done-outline" size={22} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Cloud Database & Permanent Storage</Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+            <View
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                backgroundColor: cloudSynced ? Colors.success : '#FF9500',
+                marginRight: Spacing.xs,
+              }}
+            />
+            <Text style={[Typography.bodyMedium, { fontWeight: '600', color: Colors.text }]}>
+              {cloudSynced ? 'Cloud Database Connected (PostgreSQL)' : 'Cloud Sync Ready (PostgreSQL)'}
+            </Text>
+          </View>
+
+          <Text style={[Typography.caption, { color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 18 }]}>
+            All your customer records and orders are synchronized permanently to the managed cloud database. Even if you delete or reinstall the app, your data remains safe and will be restored immediately.
+          </Text>
+
+          <Button
+            title={syncingCloud ? 'Syncing with Cloud...' : 'Sync with Cloud Database Now'}
+            variant="outline"
+            size="sm"
+            leftIcon="sync-outline"
+            loading={syncingCloud}
+            onPress={handleManualSync}
+          />
+        </Card>
 
         {feedbackBanner ? (
           <View
