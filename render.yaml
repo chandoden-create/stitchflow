@@ -2,7 +2,7 @@ services:
   # StitchFlow NestJS Backend API
   - type: web
     name: stitchflow-backend
-    env: node
+    runtime: node
     plan: free
     rootDir: backend
     buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
@@ -35,7 +35,7 @@ services:
   # StitchFlow Mobile Web Frontend
   - type: web
     name: stitchflow-mobile
-    env: static
+    runtime: static
     rootDir: mobile
     buildCommand: npx expo export -p web
     staticPublishPath: dist
