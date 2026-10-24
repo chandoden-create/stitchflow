@@ -936,4 +936,46 @@ export const localDb = {
   async getAllLocalData() {
     return readDb();
   },
+
+  async exportAllData(): Promise<string> {
+    const db = await readDb();
+    return JSON.stringify({
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      boutique: db.designer,
+      customers: db.customers,
+      orders: db.orders,
+    }, null, 2);
+  },
+
+  async importAndMergeData(jsonStr: string): Promise<{ customersAdded: number; ordersAdded: number }> {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed || !Array.isArray(parsed.customers)) {
+        throw new Error('Invalid backup file format');
+      }
+
+      const initialDb = await readDb();
+      const initialCustCount = initialDb.customers.length;
+      const initialOrdCount = initialDb.orders.length;
+
+      if (parsed.customers && parsed.customers.length > 0) {
+        await localDb.syncCloudCustomers(parsed.customers);
+      }
+      if (parsed.orders && parsed.orders.length > 0) {
+        await localDb.syncCloudOrders(parsed.orders);
+      }
+      if (parsed.boutique && typeof parsed.boutique === 'object') {
+        await localDb.updateDesigner(parsed.boutique);
+      }
+
+      const updatedDb = await readDb();
+      return {
+        customersAdded: Math.max(0, updatedDb.customers.length - initialCustCount),
+        ordersAdded: Math.max(0, updatedDb.orders.length - initialOrdCount),
+      };
+    } catch (e: any) {
+      throw new Error('Failed to parse backup data: ' + e.message);
+    }
+  },
 };

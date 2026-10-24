@@ -52,7 +52,7 @@ export const authApi = {
         existingToken.split('.').length === 3
       ) {
         try {
-          const { data } = await apiClient.get<any>('/auth/me', { timeout: 6000 });
+          const { data } = await apiClient.get<any>('/auth/me', { timeout: 2000 });
           if (data && data.id) {
             const designer = await localDb.updateDesigner(data);
             return { token: existingToken, designer };
@@ -70,7 +70,7 @@ export const authApi = {
         const { data } = await apiClient.post<any>(
           '/auth/login',
           { email: 'admin@stitchflow.app', password: 'Demo@1234' },
-          { timeout: 10000 }
+          { timeout: 2500 }
         );
         const accessToken = data?.accessToken || data?.token;
         if (accessToken) {
@@ -93,7 +93,7 @@ export const authApi = {
                 phone: '+919876543210',
                 address: '12, Shivaji Nagar, Pune, Maharashtra 411005',
               },
-              { timeout: 10000 }
+              { timeout: 2500 }
             );
             const accessToken = data?.accessToken || data?.token;
             if (accessToken) {

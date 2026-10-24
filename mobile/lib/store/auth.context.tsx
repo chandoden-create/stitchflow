@@ -35,6 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     loadStoredAuth();
+
+    // Auto-sync every 15 seconds in background so husband & wife see each other's additions in real-time
+    const timer = setInterval(() => {
+      syncWithCloud();
+    }, 15000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const syncWithCloud = useCallback(async () => {
@@ -51,8 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Restore / pull all cloud data from PostgreSQL
         await Promise.allSettled([
-          customersApi.getAll(),
-          ordersApi.getAll(),
+          customersApi.syncFromCloud(),
+          ordersApi.syncFromCloud(),
         ]);
       }
     } catch {

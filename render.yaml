@@ -1,7 +1,7 @@
 services:
   # StitchFlow NestJS Backend API
   - type: web
-    name: stitchflow-api-chandoden
+    name: stitchflow-backend
     env: node
     plan: free
     rootDir: backend
@@ -55,7 +55,7 @@ services:
       - key: EXPO_PUBLIC_CURRENCY_SYMBOL
         value: "₹"
       - key: EXPO_PUBLIC_API_URL
-        value: https://stitchflow-api-chandoden.onrender.com
+        value: https://stitchflow-backend.onrender.com
 
 databases:
   # Managed PostgreSQL Database (Free)

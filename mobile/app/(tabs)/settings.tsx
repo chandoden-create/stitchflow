@@ -7,10 +7,12 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Switch,
+  Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing } from '../../theme/spacing';
@@ -21,6 +23,9 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { storage } from '../../lib/utils/storage';
+import { DEFAULT_API_URL } from '../../lib/api/client';
+import { localDb } from '../../lib/store/local-db';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -60,6 +65,21 @@ export default function SettingsScreen() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Cloud API & Multi-Device Sync state
+  const [customApiUrl, setCustomApiUrl] = useState(DEFAULT_API_URL);
+  const [testingServer, setTestingServer] = useState(false);
+  const [serverStatusText, setServerStatusText] = useState<string | null>(null);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [showImportSection, setShowImportSection] = useState(false);
+
+  useEffect(() => {
+    storage.getItem('custom_api_url').then((saved) => {
+      if (saved && saved.trim()) {
+        setCustomApiUrl(saved.trim());
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (designer) {
@@ -195,6 +215,80 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleTestServer = async () => {
+    setTestingServer(true);
+    setServerStatusText(null);
+    try {
+      const url = (customApiUrl || DEFAULT_API_URL).trim().replace(/\/$/, '');
+      const resp = await axios.get(`${url}/health`, { timeout: 4000 });
+      if (resp.status === 200) {
+        setServerStatusText('🟢 Connected! PostgreSQL backend is active and responding.');
+      } else {
+        setServerStatusText(`🟡 Server status code: HTTP ${resp.status}`);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 503) {
+        setServerStatusText('🔴 Service Suspended: Your service is suspended in Render. Log in to dashboard.render.com and click Resume on stitchflow-backend.');
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setServerStatusText('🟡 Server is waking up (Render free tier takes ~30-45s to spin up on first request). Please test again in a moment.');
+      } else {
+        setServerStatusText('🔴 Could not reach backend: ' + (err.message || 'Network error'));
+      }
+    } finally {
+      setTestingServer(false);
+    }
+  };
+
+  const handleSaveCustomUrl = async () => {
+    const trimmed = (customApiUrl || '').trim().replace(/\/$/, '');
+    await storage.setItem('custom_api_url', trimmed);
+    setFeedbackBanner({
+      type: 'success',
+      message: 'Server URL saved: ' + trimmed,
+    });
+    setTimeout(() => setFeedbackBanner(null), 4000);
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      const json = await localDb.exportAllData();
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json);
+        setFeedbackBanner({
+          type: 'success',
+          message: 'Boutique data copied to clipboard! You can paste & send to your partner via WhatsApp.',
+        });
+      } else {
+        await Share.share({ message: json, title: 'StitchFlow Boutique Backup' });
+      }
+      setTimeout(() => setFeedbackBanner(null), 5000);
+    } catch {
+      setFeedbackBanner({ type: 'error', message: 'Could not export data.' });
+    }
+  };
+
+  const handleImportBackup = async () => {
+    if (!importJsonText.trim()) {
+      setFeedbackBanner({ type: 'error', message: 'Please paste the backup JSON text first.' });
+      return;
+    }
+    try {
+      const result = await localDb.importAndMergeData(importJsonText.trim());
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setShowImportSection(false);
+      setImportJsonText('');
+      setFeedbackBanner({
+        type: 'success',
+        message: `Merged successfully! Added ${result.customersAdded} new customers and ${result.ordersAdded} orders from partner.`,
+      });
+      setTimeout(() => setFeedbackBanner(null), 6000);
+    } catch (e: any) {
+      setFeedbackBanner({ type: 'error', message: e.message || 'Failed to import data.' });
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -208,7 +302,7 @@ export default function SettingsScreen() {
         <Card style={[styles.sectionCard, { borderColor: Colors.gold, borderWidth: 1 }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="cloud-done-outline" size={22} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Cloud Database & Permanent Storage</Text>
+            <Text style={styles.sectionTitle}>Cloud Database & Server</Text>
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
@@ -227,17 +321,130 @@ export default function SettingsScreen() {
           </View>
 
           <Text style={[Typography.caption, { color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 18 }]}>
-            All your customer records and orders are synchronized permanently to the managed cloud database. Even if you delete or reinstall the app, your data remains safe and will be restored immediately.
+            All your customer records and orders are synchronized permanently to the managed cloud database so both you and your spouse see all updates across devices.
           </Text>
+
+          <Input
+            label="Backend API Server URL"
+            value={customApiUrl}
+            onChangeText={setCustomApiUrl}
+            placeholder="e.g. https://stitchflow-backend.onrender.com"
+            autoCapitalize="none"
+            leftIcon="globe-outline"
+          />
+
+          {serverStatusText ? (
+            <View
+              style={{
+                padding: Spacing.sm,
+                backgroundColor: serverStatusText.includes('🟢')
+                  ? '#E8F5E9'
+                  : serverStatusText.includes('🟡')
+                  ? '#FFF9C4'
+                  : '#FFEBEE',
+                borderRadius: 8,
+                marginBottom: Spacing.md,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: serverStatusText.includes('🟢')
+                    ? '#1B5E20'
+                    : serverStatusText.includes('🟡')
+                    ? '#F57F17'
+                    : '#C62828',
+                  lineHeight: 18,
+                }}
+              >
+                {serverStatusText}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title={testingServer ? 'Checking...' : 'Test Connection'}
+                variant="outline"
+                size="sm"
+                leftIcon="pulse-outline"
+                loading={testingServer}
+                onPress={handleTestServer}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Save URL"
+                variant="primary"
+                size="sm"
+                leftIcon="save-outline"
+                onPress={handleSaveCustomUrl}
+              />
+            </View>
+          </View>
 
           <Button
             title={syncingCloud ? 'Syncing with Cloud...' : 'Sync with Cloud Database Now'}
-            variant="outline"
+            variant="gold"
             size="sm"
             leftIcon="sync-outline"
             loading={syncingCloud}
             onPress={handleManualSync}
           />
+        </Card>
+
+        {/* Multi-Device Direct Backup & Share with Spouse */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="share-social-outline" size={22} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Multi-Device Instant Sync & Backup</Text>
+          </View>
+
+          <Text style={[Typography.caption, { color: Colors.textSecondary, marginBottom: Spacing.md, lineHeight: 18 }]}>
+            Share all your customers and orders directly between devices or send a full backup to your partner via WhatsApp.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginBottom: showImportSection ? Spacing.md : 0 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Export & Share Data"
+                variant="outline"
+                size="sm"
+                leftIcon="copy-outline"
+                onPress={handleExportBackup}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                title={showImportSection ? 'Cancel Import' : 'Import from Partner'}
+                variant="outline"
+                size="sm"
+                leftIcon="download-outline"
+                onPress={() => setShowImportSection(!showImportSection)}
+              />
+            </View>
+          </View>
+
+          {showImportSection ? (
+            <View style={{ marginTop: Spacing.md }}>
+              <Input
+                label="Paste Partner's Backup Text"
+                value={importJsonText}
+                onChangeText={setImportJsonText}
+                placeholder="Paste the exported JSON text here..."
+                multiline
+                numberOfLines={4}
+              />
+              <Button
+                title="Merge into My App Now"
+                variant="primary"
+                size="sm"
+                leftIcon="checkmark-done-outline"
+                onPress={handleImportBackup}
+              />
+            </View>
+          ) : null}
         </Card>
 
         {feedbackBanner ? (

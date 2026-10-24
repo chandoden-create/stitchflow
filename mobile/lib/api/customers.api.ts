@@ -50,41 +50,78 @@ export interface CustomersListResponse {
 }
 
 export const customersApi = {
+  /**
+   * Return cached data immediately in 0ms, and sync cloud updates silently in background.
+   */
   getAll: async (params?: { search?: string; page?: number; limit?: number }): Promise<CustomersListResponse> => {
-    try {
-      const queryParams: any = {};
-      if (params?.search) queryParams.search = params.search;
-      if (params?.page) queryParams.page = params.page;
-      if (params?.limit) queryParams.limit = params.limit;
+    // 1. Instant local read (0ms)
+    const localResult = await localDb.listCustomers(params);
 
-      const { data } = await apiClient.get<any>('/customers', {
+    // 2. Trigger asynchronous background cloud sync (non-blocking)
+    const queryParams: any = {};
+    if (params?.search) queryParams.search = params.search;
+    if (params?.page) queryParams.page = params.page;
+    if (params?.limit) queryParams.limit = params.limit;
+
+    apiClient
+      .get<any>('/customers', {
         params: queryParams,
-        timeout: 6000,
-      });
+        timeout: 2500,
+      })
+      .then(async ({ data }) => {
+        const list = data?.data || (Array.isArray(data) ? data : []);
+        if (Array.isArray(list) && list.length > 0) {
+          await localDb.syncCloudCustomers(list);
+        }
+      })
+      .catch(() => {});
 
-      const list = data?.data || (Array.isArray(data) ? data : []);
-      if (Array.isArray(list) && list.length > 0) {
-        await localDb.syncCloudCustomers(list);
-      }
-    } catch {
-      // Backend offline or waking up; proceed with local data
-    }
-    return localDb.listCustomers(params);
+    return localResult;
   },
 
   list: async (params?: { search?: string; page?: number; limit?: number }): Promise<CustomersListResponse> => {
     return customersApi.getAll(params);
   },
 
-  getById: async (id: string): Promise<Customer> => {
+  /**
+   * Explicit cloud sync (used by pull-to-refresh & manual sync button)
+   */
+  syncFromCloud: async (): Promise<CustomersListResponse> => {
     try {
-      const { data } = await apiClient.get<Customer>(`/customers/${id}`, { timeout: 5000 });
-      if (data && data.id) {
-        await localDb.syncCloudCustomers([data]);
+      const { data } = await apiClient.get<any>('/customers', { timeout: 3500 });
+      const list = data?.data || (Array.isArray(data) ? data : []);
+      if (Array.isArray(list) && list.length > 0) {
+        await localDb.syncCloudCustomers(list);
       }
     } catch {
-      // Fallback to local
+      // Backend waking up or offline
     }
+    return localDb.listCustomers();
+  },
+
+  getById: async (id: string): Promise<Customer> => {
+    const localCustomer = await localDb.getCustomerById(id).catch(() => null);
+
+    apiClient
+      .get<Customer>(`/customers/${id}`, { timeout: 2500 })
+      .then(async ({ data }) => {
+        if (data && data.id) {
+          await localDb.syncCloudCustomers([data]);
+        }
+      })
+      .catch(() => {});
+
+    if (localCustomer) return localCustomer;
+
+    // If not found locally, await cloud fetch
+    try {
+      const { data } = await apiClient.get<Customer>(`/customers/${id}`, { timeout: 3000 });
+      if (data && data.id) {
+        await localDb.syncCloudCustomers([data]);
+        return await localDb.getCustomerById(data.id);
+      }
+    } catch {}
+
     return localDb.getCustomerById(id);
   },
 
@@ -97,6 +134,10 @@ export const customersApi = {
     const consentStatus =
       customerData.consentGiven ?? customerData.whatsappConsent ?? true ? 'GIVEN' : 'PENDING';
 
+    // 1. Save immediately to localDb for 0ms instant UI response!
+    const localSaved = await localDb.createCustomer(customerData);
+
+    // 2. Dispatch to cloud database in background
     const payload: any = {
       name: customerData.name.trim(),
       whatsappNumber: cleanPhone,
@@ -106,20 +147,23 @@ export const customersApi = {
     if (alt) payload.altPhone = normalizeIndianPhone(alt);
     if (customerData.notes?.trim()) payload.notes = customerData.notes.trim();
 
-    try {
-      const { data } = await apiClient.post<Customer>('/customers', payload, { timeout: 8000 });
-      if (data && data.id) {
-        await localDb.syncCloudCustomers([data]);
-        return await localDb.getCustomerById(data.id);
-      }
-    } catch (err) {
-      console.warn('Backend customer create failed, falling back to localDb:', err);
-    }
+    apiClient
+      .post<Customer>('/customers', payload, { timeout: 3500 })
+      .then(async ({ data }) => {
+        if (data && data.id) {
+          await localDb.syncCloudCustomers([data]);
+        }
+      })
+      .catch((err) => {
+        console.warn('Background cloud customer sync queued:', err?.message);
+      });
 
-    return await localDb.createCustomer(customerData);
+    return localSaved;
   },
 
   update: async (id: string, updates: Partial<CreateCustomerData>): Promise<Customer> => {
+    const localUpdated = await localDb.updateCustomer(id, updates);
+
     const payload: any = {};
     if (updates.name) payload.name = updates.name.trim();
     if (updates.whatsappNumber) payload.whatsappNumber = normalizeIndianPhone(updates.whatsappNumber);
@@ -131,26 +175,21 @@ export const customersApi = {
       payload.consentStatus = updates.consentGiven ?? updates.whatsappConsent ? 'GIVEN' : 'PENDING';
     }
 
-    try {
-      const { data } = await apiClient.put<Customer>(`/customers/${id}`, payload, { timeout: 6000 });
-      if (data && data.id) {
-        await localDb.syncCloudCustomers([data]);
-        return await localDb.getCustomerById(data.id);
-      }
-    } catch {
-      // Fallback
-    }
+    apiClient
+      .put<Customer>(`/customers/${id}`, payload, { timeout: 3000 })
+      .then(async ({ data }) => {
+        if (data && data.id) {
+          await localDb.syncCloudCustomers([data]);
+        }
+      })
+      .catch(() => {});
 
-    return await localDb.updateCustomer(id, updates);
+    return localUpdated;
   },
 
   delete: async (id: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/customers/${id}`, { timeout: 5000 });
-    } catch {
-      // Fallback
-    }
     await localDb.deleteCustomer(id);
+    apiClient.delete(`/customers/${id}`, { timeout: 2500 }).catch(() => {});
   },
 
   checkDuplicate: async (whatsappNumber: string): Promise<Customer | null> => {
